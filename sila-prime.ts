@@ -19,6 +19,12 @@ const LONG_COMMANDS = new Set(["sync", "live", "ingest", "dream", "vacuum", "upd
 const OPEN = "<sila_memory>\n"
 const CLOSE = "\n</sila_memory>"
 
+// One server process can hold several plugin instances, one per location. A
+// process-wide set dedupes them so a single prompt is primed once. Storage
+// carries the mark across reloads and processes; this set closes the window
+// where two live instances read the store before either writes.
+const primed = new Set<string>()
+
 type RunResult = { ok: boolean; output: string }
 type Runner = (args: string[], cwd: string, timeoutMs: number) => Promise<RunResult>
 
@@ -138,11 +144,14 @@ function resolveRunner(ctx: any): Runner {
   return typeof ctx?.silaRunner === "function" ? ctx.silaRunner : defaultRunner
 }
 
+function resetPrimed(): void {
+  primed.clear()
+}
+
 const plugin = {
   id: "sila-prime",
   async setup(ctx: any) {
     const run = resolveRunner(ctx)
-    const inFlight = new Set<string>()
 
     await ctx.command.transform((editor: any) => {
       editor.add({
@@ -162,7 +171,15 @@ const plugin = {
       if (!event?.prompt || typeof event.prompt.text !== "string") return
       if (typeof event.sessionID !== "string" || event.sessionID.length === 0) return
       if (primeDisabled()) return
+      // Each plugin instance is bound to one location. Ignore events for other
+      // locations so instances do not each prime the same prompt.
+      const location = event?.location?.directory
+      if (location && ctx.location?.directory && location !== ctx.location.directory) return
       const key = `sila-prime/injected/${event.sessionID}`
+      // Add before the first await so sibling instances in this process see the
+      // claim immediately.
+      if (primed.has(key)) return
+      primed.add(key)
       let alreadyInjected: unknown
       try {
         alreadyInjected = await ctx.storage.get(key)
@@ -171,31 +188,25 @@ const plugin = {
         return
       }
       if (alreadyInjected) return
-      if (inFlight.has(key)) return
-      inFlight.add(key)
+      let injection = ""
       try {
-        let injection = ""
-        try {
-          const result = await run(primeArgs(), projectCwd(ctx), primeTimeout())
-          if (result.ok) injection = wrapBriefing(result.output, injectionBudget())
-        } catch (error) {
-          console.error(`sila-prime: prime failed: ${error}`)
-        }
-        // Mark the session after one attempt, even when the briefing is empty
-        // or the run failed, so a quiet or missing sila does not add work on
-        // every prompt. Use /sila to refresh on demand.
-        try {
-          await ctx.storage.set(key, true)
-        } catch (error) {
-          console.error(`sila-prime: could not record the session: ${error}`)
-        }
-        if (injection) event.prompt.text = `${injection}\n\n${event.prompt.text}`
-      } finally {
-        inFlight.delete(key)
+        const result = await run(primeArgs(), projectCwd(ctx), primeTimeout())
+        if (result.ok) injection = wrapBriefing(result.output, injectionBudget())
+      } catch (error) {
+        console.error(`sila-prime: prime failed: ${error}`)
       }
+      // Mark the session after one attempt, even when the briefing is empty or
+      // the run failed, so a quiet or missing sila does not add work on every
+      // prompt. Use /sila to refresh on demand.
+      try {
+        await ctx.storage.set(key, true)
+      } catch (error) {
+        console.error(`sila-prime: could not record the session: ${error}`)
+      }
+      if (injection) event.prompt.text = `${injection}\n\n${event.prompt.text}`
     })
   },
 }
 
-export { commandArgs, defaultRunner, injectionBudget, primeArgs, primeDisabled, tokenize, wrapBriefing }
+export { commandArgs, defaultRunner, injectionBudget, primeArgs, primeDisabled, resetPrimed, tokenize, wrapBriefing }
 export default plugin

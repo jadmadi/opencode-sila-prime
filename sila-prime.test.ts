@@ -5,6 +5,7 @@ import plugin, {
   injectionBudget,
   primeArgs,
   primeDisabled,
+  resetPrimed,
   tokenize,
   wrapBriefing,
 } from "./sila-prime.ts"
@@ -13,6 +14,7 @@ const ENV_KEYS = ["SILA_BIN", "SILA_PRIME", "SILA_PRIME_OFF", "SILA_PRIME_ARGS",
 
 afterEach(() => {
   for (const key of ENV_KEYS) delete process.env[key]
+  resetPrimed()
 })
 
 type RunResult = { ok: boolean; output: string }
@@ -322,5 +324,23 @@ describe("prompt hook", () => {
     expect(calls).toHaveLength(1)
     expect(first.prompt.text).toContain("<sila_memory>")
     expect(second.prompt.text).toBe("again")
+  })
+
+  test("does not re-prime a session another instance already primed", async () => {
+    const first = await boot(async () => ok("PROJECT MEMORY"))
+    const second = await boot(async () => ok("PROJECT MEMORY"))
+    const a = { sessionID: "ses_shared", prompt: { text: "hello" } }
+    await first.hooks.prompt(a)
+    const b = { sessionID: "ses_shared", prompt: { text: "again" } }
+    await second.hooks.prompt(b)
+    expect(first.calls).toHaveLength(1)
+    expect(second.calls).toHaveLength(0)
+    expect(b.prompt.text).toBe("again")
+  })
+
+  test("ignores an event for another location", async () => {
+    const { hooks, calls } = await boot(async () => ok("PROJECT MEMORY"))
+    await hooks.prompt({ sessionID: "ses_loc", location: { directory: "/somewhere/else" }, prompt: { text: "hello" } })
+    expect(calls).toHaveLength(0)
   })
 })
