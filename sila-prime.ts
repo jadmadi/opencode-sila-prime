@@ -83,8 +83,7 @@ function tokenize(input: string): string[] {
 }
 
 function isLongCommand(args: string[]): boolean {
-  const first = args.find((arg) => !arg.startsWith("-"))
-  return first !== undefined && LONG_COMMANDS.has(first)
+  return args.some((arg) => LONG_COMMANDS.has(arg))
 }
 
 function commandArgs(text: unknown): { args: string[]; timeoutMs: number } {
@@ -99,6 +98,7 @@ async function defaultRunner(args: string[], cwd: string, timeoutMs: number): Pr
   let proc: any
   try {
     proc = Bun.spawn([silaBin(), ...args], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" })
+    proc.unref?.()
   } catch (error) {
     return { ok: false, output: `could not start ${silaBin()}: ${error}` }
   }
@@ -125,7 +125,7 @@ async function defaultRunner(args: string[], cwd: string, timeoutMs: number): Pr
       } catch {}
       return { ok: false, output: `${silaBin()} ${args.join(" ")} timed out after ${timeoutMs}ms` }
     }
-    const output = result.out && result.err ? `${result.out}\n${result.err}` : result.out || result.err
+    const output = result.code === 0 ? result.out || result.err : [result.out, result.err].filter(Boolean).join("\n")
     return { ok: result.code === 0, output }
   } catch (error) {
     return { ok: false, output: `${silaBin()} failed: ${error}` }

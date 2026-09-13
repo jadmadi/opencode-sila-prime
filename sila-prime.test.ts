@@ -107,6 +107,7 @@ describe("commandArgs", () => {
 
   test("finds a slow subcommand after a leading flag", () => {
     expect(commandArgs("--project=x sync").timeoutMs).toBe(180000)
+    expect(commandArgs("--project foo sync").timeoutMs).toBe(180000)
     expect(commandArgs("live").timeoutMs).toBe(180000)
     expect(commandArgs("watch").timeoutMs).toBe(30000)
   })
@@ -175,6 +176,13 @@ describe("defaultRunner", () => {
     expect(result.ok).toBe(false)
     expect(result.output).toContain("out")
     expect(result.output).toContain("err")
+  })
+
+  test("keeps successful output to stdout", async () => {
+    process.env.SILA_BIN = "sh"
+    const result = await defaultRunner(["-c", "echo out; echo warn >&2; exit 0"], process.cwd(), 2000)
+    expect(result.ok).toBe(true)
+    expect(result.output).toBe("out")
   })
 
   test("reports a binary that cannot start", async () => {
