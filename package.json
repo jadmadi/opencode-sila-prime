@@ -1,0 +1,27 @@
+{
+  "name": "opencode-sila-prime",
+  "version": "0.1.0",
+  "description": "OpenCode V2 plugin that primes each session from the sila knowledge store",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "bun test"
+  },
+  "exports": {
+    ".": "./sila-prime.ts"
+  },
+  "files": [
+    "sila-prime.ts"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "sila",
+    "memory",
+    "context"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jadmadi/opencode-sila-prime.git"
+  }
+}
