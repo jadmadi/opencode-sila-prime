@@ -28,7 +28,8 @@ grep sila-prime ~/.local/share/opencode/log/opencode.log | tail
 - Keep the plugin dependency-free. Use Bun globals.
 - Shell out to the `sila` CLI. Never read or write `knowledge.db` directly.
 - The prompt hook must not throw and must not block a prompt for long. The
-  runner has a timeout and the hook catches failures.
+  runner races the run against a hard deadline, escalates to `kill(9)`, and the
+  hook catches failures.
 - Inject at most once per session, tracked in `ctx.storage` under
   `sila-prime/injected/<id>`. Mark the session after one attempt so a quiet or
   missing sila does not spawn on every prompt.
@@ -47,8 +48,10 @@ grep sila-prime ~/.local/share/opencode/log/opencode.log | tail
 ## Layout
 
 - `numberEnv`, `primeDisabled`, `primeArgs`, `injectionBudget` - environment.
-- `wrapBriefing`, `tokenize`, `commandArgs` - pure helpers, exported for tests.
-- `defaultRunner` - spawns sila with a timeout and captures stdout and stderr.
+- `wrapBriefing`, `tokenize`, `commandArgs`, `isLongCommand` - pure helpers.
+- `clipOutput` - caps command output.
+- `defaultRunner` - spawns sila, races the work against a hard deadline, and
+  captures stdout and stderr.
 - `setup` - registers the `/sila` command and the prompt hook.
 - `sila-prime.test.ts` - tests with a fake ctx and an injected runner.
 
