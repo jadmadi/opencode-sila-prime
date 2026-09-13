@@ -1,0 +1,58 @@
+# AGENTS.md
+
+Guidance for agents working in this repository.
+
+## What this is
+
+An OpenCode V2 plugin (`sila-prime.ts`) that runs `sila prime` on the first
+prompt of a session and injects the briefing, plus a `/sila` command that runs a
+sila subcommand and posts the result. No build step, no dependencies, MIT.
+
+## Local development
+
+```sh
+bun test
+cp sila-prime.ts ~/.config/opencode/plugins/sila-prime.ts
+touch ~/.config/opencode/plugins/sila-prime.ts
+```
+
+Check the server log when something is off:
+
+```sh
+grep sila-prime ~/.local/share/opencode/log/opencode.log | tail
+```
+
+## Hard constraints
+
+- Do not import `@opencode/plugin`. Export a plain `{ id, setup }` object.
+- Keep the plugin dependency-free. Use Bun globals.
+- Shell out to the `sila` CLI. Never read or write `knowledge.db` directly.
+- The prompt hook must not throw and must not block a prompt for long. The
+  runner has a timeout and the hook catches failures.
+- Inject at most once per session, tracked in `ctx.storage` under
+  `sila-prime/injected/<id>`. Mark the session after one attempt so a quiet or
+  missing sila does not spawn on every prompt.
+
+## API notes
+
+- `ctx.location.directory` is the session directory and the working directory
+  for the sila call. Sila infers the project from it.
+- `ctx.session.hook("prompt", cb)` can rewrite `event.prompt.text`.
+- `ctx.session.prompt({ sessionID, text })` posts command output to the session.
+- A command surfaces an error by throwing.
+- `ctx.silaRunner` is a test seam: a function `(args, cwd, timeoutMs) =>
+  Promise<{ ok, output }>`. When absent, the plugin uses `defaultRunner`, which
+  spawns the CLI through `Bun.spawn`.
+
+## Layout
+
+- `numberEnv`, `primeDisabled`, `primeArgs`, `injectionBudget` - environment.
+- `wrapBriefing`, `tokenize`, `commandArgs` - pure helpers, exported for tests.
+- `defaultRunner` - spawns sila with a timeout and captures stdout and stderr.
+- `setup` - registers the `/sila` command and the prompt hook.
+- `sila-prime.test.ts` - tests with a fake ctx and an injected runner.
+
+## Releasing
+
+- Semantic commit messages. Changes through a feature branch and a PR.
+- Keep `NOTICE` accurate.

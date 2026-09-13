@@ -1,0 +1,8 @@
+This plugin calls the sila CLI, a separate local-first knowledge engine.
+
+  sila - https://github.com/jadmadi/sila
+  Copyright (c) 2026 Jad Madi
+  Licensed under the MIT License.
+
+No sila source is copied. The plugin runs `sila prime` and `sila <command>`,
+and passes the output to the session. It does not read or write sila's database.
