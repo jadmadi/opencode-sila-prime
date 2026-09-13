@@ -15,7 +15,7 @@ const DEFAULT_PRIME_TIMEOUT = 5000
 const DEFAULT_COMMAND_TIMEOUT = 30000
 const LONG_COMMAND_TIMEOUT = 180000
 const DEFAULT_OUTPUT_CAP = 20000
-const LONG_COMMANDS = new Set(["sync", "watch", "live", "ingest", "dream", "reconcile", "vacuum", "update"])
+const LONG_COMMANDS = new Set(["sync", "live", "ingest", "dream", "vacuum", "update", "doc"])
 const OPEN = "<sila_memory>\n"
 const CLOSE = "\n</sila_memory>"
 
@@ -50,8 +50,7 @@ function outputCap(): number {
 }
 
 function primeArgs(): string[] {
-  const extra = (process.env.SILA_PRIME_ARGS || "").split(/\s+/).filter(Boolean)
-  return ["prime", "--no-color", ...extra]
+  return ["prime", "--no-color", ...tokenize(process.env.SILA_PRIME_ARGS || "")]
 }
 
 function wrapBriefing(output: string, budget: number): string {
@@ -83,11 +82,16 @@ function tokenize(input: string): string[] {
   return tokens
 }
 
+function isLongCommand(args: string[]): boolean {
+  const first = args.find((arg) => !arg.startsWith("-"))
+  return first !== undefined && LONG_COMMANDS.has(first)
+}
+
 function commandArgs(text: unknown): { args: string[]; timeoutMs: number } {
   const raw = typeof text === "string" ? text.trim() : ""
   const tokens = raw ? tokenize(raw) : []
   const args = tokens.length > 0 ? tokens : ["prime", "--no-color"]
-  const timeoutMs = LONG_COMMANDS.has(args[0]) ? LONG_COMMAND_TIMEOUT : DEFAULT_COMMAND_TIMEOUT
+  const timeoutMs = isLongCommand(args) ? LONG_COMMAND_TIMEOUT : DEFAULT_COMMAND_TIMEOUT
   return { args, timeoutMs }
 }
 
@@ -98,20 +102,31 @@ async function defaultRunner(args: string[], cwd: string, timeoutMs: number): Pr
   } catch (error) {
     return { ok: false, output: `could not start ${silaBin()}: ${error}` }
   }
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    try {
-      proc.kill()
-    } catch {}
-  }, timeoutMs)
-  try {
+  const completed = (async () => {
     const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
     const code = await proc.exited
-    if (timedOut) return { ok: false, output: `${silaBin()} ${args.join(" ")} timed out after ${timeoutMs}ms` }
-    const output = (stdout || "").trim()
-    const error = (stderr || "").trim()
-    return { ok: code === 0, output: output || error }
+    return { code, out: (stdout || "").trim(), err: (stderr || "").trim() }
+  })()
+  // The read only finishes when the child closes both pipes. A child that
+  // ignores the signal, or a grandchild that inherits the pipe, can keep them
+  // open past the timeout, so the deadline is raced against the work and the
+  // prompt returns without waiting for the streams. The promise is left to
+  // settle on its own.
+  completed.catch(() => {})
+  let timer: any
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs)
+  })
+  try {
+    const result = await Promise.race([completed, deadline])
+    if (result === null) {
+      try {
+        proc.kill(9)
+      } catch {}
+      return { ok: false, output: `${silaBin()} ${args.join(" ")} timed out after ${timeoutMs}ms` }
+    }
+    const output = result.out && result.err ? `${result.out}\n${result.err}` : result.out || result.err
+    return { ok: result.code === 0, output }
   } catch (error) {
     return { ok: false, output: `${silaBin()} failed: ${error}` }
   } finally {
@@ -127,6 +142,7 @@ const plugin = {
   id: "sila-prime",
   async setup(ctx: any) {
     const run = resolveRunner(ctx)
+    const inFlight = new Set<string>()
 
     await ctx.command.transform((editor: any) => {
       editor.add({
@@ -136,34 +152,47 @@ const plugin = {
           const { args, timeoutMs } = commandArgs(prompt?.text)
           const result = await run(args, projectCwd(ctx), timeoutMs)
           const output = result.output || "(sila returned no output)"
-          if (!result.ok) throw new Error(output)
+          if (!result.ok) throw new Error(clipOutput(output, outputCap()))
           await ctx.session.prompt({ sessionID, text: clipOutput(output, outputCap()) })
         },
       })
     })
 
     await ctx.session.hook("prompt", async (event: any) => {
-      if (!event?.prompt) return
+      if (!event?.prompt || typeof event.prompt.text !== "string") return
+      if (typeof event.sessionID !== "string" || event.sessionID.length === 0) return
       if (primeDisabled()) return
       const key = `sila-prime/injected/${event.sessionID}`
-      if (await ctx.storage.get(key)) return
-      let injection = ""
+      let alreadyInjected: unknown
       try {
-        const result = await run(primeArgs(), projectCwd(ctx), primeTimeout())
-        if (result.ok) injection = wrapBriefing(result.output, injectionBudget())
+        alreadyInjected = await ctx.storage.get(key)
       } catch (error) {
-        console.error(`sila-prime: prime failed: ${error}`)
+        console.error(`sila-prime: could not read session state: ${error}`)
+        return
       }
-      // Mark the session after one attempt, even when the briefing is empty or
-      // the run failed, so a quiet or missing sila does not add work on every
-      // prompt. Use /sila to refresh on demand.
+      if (alreadyInjected) return
+      if (inFlight.has(key)) return
+      inFlight.add(key)
       try {
-        await ctx.storage.set(key, true)
-      } catch (error) {
-        console.error(`sila-prime: could not record the session: ${error}`)
+        let injection = ""
+        try {
+          const result = await run(primeArgs(), projectCwd(ctx), primeTimeout())
+          if (result.ok) injection = wrapBriefing(result.output, injectionBudget())
+        } catch (error) {
+          console.error(`sila-prime: prime failed: ${error}`)
+        }
+        // Mark the session after one attempt, even when the briefing is empty
+        // or the run failed, so a quiet or missing sila does not add work on
+        // every prompt. Use /sila to refresh on demand.
+        try {
+          await ctx.storage.set(key, true)
+        } catch (error) {
+          console.error(`sila-prime: could not record the session: ${error}`)
+        }
+        if (injection) event.prompt.text = `${injection}\n\n${event.prompt.text}`
+      } finally {
+        inFlight.delete(key)
       }
-      if (!injection) return
-      event.prompt.text = `${injection}\n\n${event.prompt.text ?? ""}`
     })
   },
 }

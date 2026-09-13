@@ -105,6 +105,12 @@ describe("commandArgs", () => {
     expect(commandArgs("ingest --project=x").timeoutMs).toBe(180000)
   })
 
+  test("finds a slow subcommand after a leading flag", () => {
+    expect(commandArgs("--project=x sync").timeoutMs).toBe(180000)
+    expect(commandArgs("live").timeoutMs).toBe(180000)
+    expect(commandArgs("watch").timeoutMs).toBe(30000)
+  })
+
   test("tokenizes quoted arguments", () => {
     expect(commandArgs('search "wal mode"')).toEqual({ args: ["search", "wal mode"], timeoutMs: 30000 })
   })
@@ -115,6 +121,11 @@ describe("environment", () => {
     expect(primeArgs()).toEqual(["prime", "--no-color"])
     process.env.SILA_PRIME_ARGS = "--top=8 --json"
     expect(primeArgs()).toEqual(["prime", "--no-color", "--top=8", "--json"])
+  })
+
+  test("prime keeps a quoted argument together", () => {
+    process.env.SILA_PRIME_ARGS = '--project "my project"'
+    expect(primeArgs()).toEqual(["prime", "--no-color", "--project", "my project"])
   })
 
   test("prime is enabled by default and disabled by flag or value", () => {
@@ -147,6 +158,23 @@ describe("defaultRunner", () => {
     const result = await defaultRunner(["5"], process.cwd(), 150)
     expect(result.ok).toBe(false)
     expect(result.output).toMatch(/timed out after 150ms/)
+  })
+
+  test("bounds a command that ignores the signal", async () => {
+    process.env.SILA_BIN = "bash"
+    const started = Date.now()
+    const result = await defaultRunner(["-c", "trap '' TERM; sleep 3"], process.cwd(), 200)
+    expect(result.ok).toBe(false)
+    expect(result.output).toMatch(/timed out after 200ms/)
+    expect(Date.now() - started).toBeLessThan(3000)
+  })
+
+  test("keeps stderr alongside stdout when a command fails", async () => {
+    process.env.SILA_BIN = "sh"
+    const result = await defaultRunner(["-c", "echo out; echo err >&2; exit 1"], process.cwd(), 2000)
+    expect(result.ok).toBe(false)
+    expect(result.output).toContain("out")
+    expect(result.output).toContain("err")
   })
 
   test("reports a binary that cannot start", async () => {
@@ -246,5 +274,45 @@ describe("prompt hook", () => {
     const { hooks, calls } = await boot(async () => ok("PROJECT MEMORY"))
     await hooks.prompt({ sessionID: "ses_2" })
     expect(calls).toHaveLength(0)
+  })
+
+  test("does not prime without a session id", async () => {
+    const { hooks, calls } = await boot(async () => ok("PROJECT MEMORY"))
+    const event = { prompt: { text: "hello" } }
+    await hooks.prompt(event)
+    expect(event.prompt.text).toBe("hello")
+    expect(calls).toHaveLength(0)
+  })
+
+  test("ignores a non-string prompt text", async () => {
+    const { hooks, calls } = await boot(async () => ok("PROJECT MEMORY"))
+    await hooks.prompt({ sessionID: "ses_1", prompt: { text: 42 } })
+    expect(calls).toHaveLength(0)
+  })
+
+  test("does not throw when session state cannot be read", async () => {
+    const { ctx, hooks } = await boot(async () => ok("PROJECT MEMORY"))
+    ctx.storage.get = async () => {
+      throw new Error("storage down")
+    }
+    const event = { sessionID: "ses_1", prompt: { text: "hello" } }
+    await hooks.prompt(event)
+    expect(event.prompt.text).toBe("hello")
+  })
+
+  test("injects once for two concurrent first prompts", async () => {
+    let release: (value: RunResult) => void = () => {}
+    const gate = new Promise<RunResult>((resolve) => {
+      release = resolve
+    })
+    const { hooks, calls } = await boot(() => gate)
+    const first = { sessionID: "ses_1", prompt: { text: "hello" } }
+    const second = { sessionID: "ses_1", prompt: { text: "again" } }
+    const inFlight = [hooks.prompt(first), hooks.prompt(second)]
+    release(ok("PROJECT MEMORY"))
+    await Promise.all(inFlight)
+    expect(calls).toHaveLength(1)
+    expect(first.prompt.text).toContain("<sila_memory>")
+    expect(second.prompt.text).toBe("again")
   })
 })
