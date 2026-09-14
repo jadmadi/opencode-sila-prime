@@ -10,6 +10,8 @@
 // { id, setup } object and uses Bun globals. It shells out to the sila CLI and
 // never reads or writes sila's database directly.
 
+const VERSION = "0.1.0"
+
 const DEFAULT_BUDGET = 6000
 const DEFAULT_PRIME_TIMEOUT = 5000
 const DEFAULT_COMMAND_TIMEOUT = 30000
@@ -208,5 +210,5 @@ const plugin = {
   },
 }
 
-export { commandArgs, defaultRunner, injectionBudget, primeArgs, primeDisabled, resetPrimed, tokenize, wrapBriefing }
+export { commandArgs, defaultRunner, injectionBudget, primeArgs, primeDisabled, resetPrimed, tokenize, wrapBriefing, VERSION }
 export default plugin
