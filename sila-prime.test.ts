@@ -8,6 +8,7 @@ import plugin, {
   resetPrimed,
   tokenize,
   wrapBriefing,
+  VERSION,
 } from "./sila-prime.ts"
 
 const ENV_KEYS = ["SILA_BIN", "SILA_PRIME", "SILA_PRIME_OFF", "SILA_PRIME_ARGS", "SILA_PRIME_BUDGET", "SILA_PRIME_TIMEOUT"]
@@ -342,5 +343,12 @@ describe("prompt hook", () => {
     const { hooks, calls } = await boot(async () => ok("PROJECT MEMORY"))
     await hooks.prompt({ sessionID: "ses_loc", location: { directory: "/somewhere/else" }, prompt: { text: "hello" } })
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe("version", () => {
+  test("VERSION matches package.json", async () => {
+    const pkg = (await Bun.file(new URL("./package.json", import.meta.url)).json()) as { version: string }
+    expect(VERSION).toBe(pkg.version)
   })
 })

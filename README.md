@@ -22,7 +22,9 @@ by hand. A `/sila` command runs sila subcommands on demand.
 ## Requirements
 
 `sila` on `PATH`, or set `SILA_BIN` to its full path. Tested against sila 0.x
-and OpenCode `0.0.0-beta-19425`.
+and OpenCode v2.0.3.
+
+To pin a release, replace `main` in the URL with a tag such as `v0.1.0`.
 
 ## Install
 
