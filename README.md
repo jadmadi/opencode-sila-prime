@@ -26,6 +26,12 @@ and OpenCode v2.0.3.
 
 To pin a release, replace `main` in the URL with a tag such as `v0.1.0`.
 
+## OpenCode
+
+This plugin runs on OpenCode. Install it with my referral link:
+
+https://opencode.ai/go?ref=N9H3ZEP22A
+
 ## Install
 
 ```sh
