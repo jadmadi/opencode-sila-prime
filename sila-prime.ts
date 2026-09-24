@@ -10,7 +10,7 @@
 // { id, setup } object and uses Bun globals. It shells out to the sila CLI and
 // never reads or writes sila's database directly.
 
-const VERSION = "0.1.2"
+const VERSION = "2026.9.0"
 
 const DEFAULT_BUDGET = 6000
 const DEFAULT_PRIME_TIMEOUT = 5000
