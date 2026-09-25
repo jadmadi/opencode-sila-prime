@@ -6,7 +6,7 @@ Guidance for agents working in this repository.
 
 An OpenCode V2 plugin (`sila-prime.ts`) that runs `sila prime` on the first
 prompt of a session and injects the briefing, plus a `/sila` command that runs a
-sila subcommand and posts the result. No build step, no dependencies, MIT.
+sila subcommand and posts the result. No build step, no dependencies, AGPL-3.0-only.
 
 ## Local development
 

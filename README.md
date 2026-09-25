@@ -94,4 +94,4 @@ Sila is a separate project by Jad Madi, MIT licensed. See `NOTICE`.
 
 ## License
 
-MIT
+AGPL-3.0-only. Copyright (C) 2026 Jad Madi.
