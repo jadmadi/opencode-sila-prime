@@ -3,3 +3,4 @@ rm/
 .worktrees/
 *.log
 .DS_Store
+aube-lock.yaml
