@@ -1,6 +1,7 @@
 {
   "name": "opencode-sila-prime",
   "version": "2026.9.0",
+  "builtUnder": "2.0.16",
   "description": "OpenCode V2 plugin that primes each session from the sila knowledge store",
   "type": "module",
   "license": "MIT",
