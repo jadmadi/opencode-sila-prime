@@ -6,11 +6,13 @@
 // plugin also registers a /sila command that runs a sila subcommand and posts
 // the result to the session.
 //
-// The runtime does not resolve @opencode/plugin, so this file exports a plain
-// { id, setup } object and uses Bun globals. It shells out to the sila CLI and
-// never reads or writes sila's database directly.
+// The host provides @opencode/plugin at runtime, so this file uses
+// Plugin.define and Bun globals. It shells out to the sila CLI and never
+// reads or writes sila's database directly.
 
-const VERSION = "2026.9.0"
+import { Plugin } from "@opencode/plugin"
+
+const VERSION = "2026.10.0"
 
 const DEFAULT_BUDGET = 6000
 const DEFAULT_PRIME_TIMEOUT = 5000
@@ -150,7 +152,7 @@ function resetPrimed(): void {
   primed.clear()
 }
 
-const plugin = {
+const plugin = Plugin.define({
   id: "sila-prime",
   async setup(ctx: any) {
     const run = resolveRunner(ctx)
@@ -208,7 +210,7 @@ const plugin = {
       if (injection) event.prompt.text = `${injection}\n\n${event.prompt.text}`
     })
   },
-}
+})
 
 export { commandArgs, defaultRunner, injectionBudget, primeArgs, primeDisabled, resetPrimed, tokenize, wrapBriefing, VERSION }
 export default plugin
