@@ -24,7 +24,9 @@ grep sila-prime ~/.local/share/opencode/log/opencode.log | tail
 
 ## Hard constraints
 
-- Do not import `@opencode/plugin`. Export a plain `{ id, setup }` object.
+- Import `{ Plugin } from "@opencode/plugin"` and export
+  `Plugin.define({ id, setup })`. The host provides the module at runtime; do
+  not add it as a package dependency. Tests stub it in `test-preload.ts`.
 - Keep the plugin dependency-free. Use Bun globals.
 - Shell out to the `sila` CLI. Never read or write `knowledge.db` directly.
 - The prompt hook must not throw and must not block a prompt for long. The
