@@ -24,7 +24,7 @@ by hand. A `/sila` command runs sila subcommands on demand.
 `sila` on `PATH`, or set `SILA_BIN` to its full path. Tested against sila 0.x
 and OpenCode v2.1.4.
 
-To pin a release, replace `main` in the URL with a tag such as `v2026.10.0`.
+To pin a release, replace `main` in the URL with a tag such as `v2026.10.1`.
 
 ## OpenCode
 
