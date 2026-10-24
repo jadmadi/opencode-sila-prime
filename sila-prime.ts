@@ -12,7 +12,7 @@
 
 import { Plugin } from "@opencode/plugin"
 
-const VERSION = "2026.10.0"
+const VERSION = "2026.10.1"
 
 const DEFAULT_BUDGET = 6000
 const DEFAULT_PRIME_TIMEOUT = 5000
